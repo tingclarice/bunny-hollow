@@ -1,0 +1,55 @@
+"""Shared visual constants for the Pygame interface."""
+
+from typing import Literal
+
+OCEAN_COLOR = (83, 161, 194)
+PANEL = (248, 235, 210)
+PANEL_SHADOW = (75, 49, 39)
+PANEL_BORDER = (111, 72, 53)
+PANEL_INSET = (218, 185, 137)
+TEXT = (71, 51, 43)
+MUTED = (126, 100, 77)
+WALL_COLOR = (94, 62, 43)
+PLAYER_COLORS = ((184, 75, 53), (43, 105, 134))
+PLAYER_CARD_FILL = (255, 245, 218)
+PLAYER_CARD_INACTIVE = (235, 220, 192)
+PLAYER_CARD_MUTED = (145, 127, 108)
+HIGHLIGHT = (255, 223, 78)
+HIGHLIGHT_OUTLINE = (62, 50, 30)
+FENCE_COLOR = (138, 83, 54)
+FENCE_USED = (191, 171, 140)
+
+SPRITE_SIZE = 48
+SPRITE_COLUMNS = 8
+SPRITE_ROWS = 4
+PAWN_MOVE_ANIMATION_MS = 180
+PAWN_SPRITE_CELL_SCALE = 2.7
+Direction = Literal["up", "down", "left", "right"]
+Position = tuple[int, int]
+MOVE_DIRECTION_BY_DELTA: dict[Position, Direction] = {
+    (0, -1): "up",
+    (0, 1): "down",
+    (-1, 0): "left",
+    (1, 0): "right",
+}
+SPRITE_ROW_BY_DIRECTION: dict[Direction, int] = {
+    "up": 0,
+    "down": 1,
+    "left": 2,
+    "right": 3,
+}
+
+TILESET_TILE_SIZE = 16
+GARDEN_GRASS_CENTER = (10, 3)
+GARDEN_GRASS_TOP_LEFT = (9, 1)
+GARDEN_GRASS_TOP = (11, 1)
+GARDEN_GRASS_TOP_RIGHT = (12, 1)
+GARDEN_GRASS_LEFT = (9, 2)
+GARDEN_GRASS_RIGHT = (12, 3)
+GARDEN_GRASS_BOTTOM_LEFT = (9, 4)
+GARDEN_GRASS_BOTTOM = (10, 4)
+GARDEN_GRASS_BOTTOM_RIGHT = (12, 4)
+GARDEN_DIRT = (16, 2)
+OCEAN_TILE = (13, 1)
+GARDEN_BACKGROUND_TILE_SIZE = 32
+GOAL_HOUSE_SPRITE_RECTS = ((256, 80, 16, 16), (256, 272, 16, 16))

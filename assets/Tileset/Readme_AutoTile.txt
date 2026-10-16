@@ -1,0 +1,1 @@
+The Grass Tile and Grass Tile with Water in this asset support the AutoTile feature, making level design more efficient. The AutoTile system used is based on the reference from: https://michagamedev.wordpress.com/.
