@@ -41,12 +41,18 @@ class Board:
     span two adjacent cells.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, time_limit_ms: int = 600000) -> None:
         self.pawns: list[Position] = [(4, 8), (4, 0)]
         self.walls_remaining = [10, 10]
         self.walls: set[Wall] = set()
         self.current_player: Player = 0
         self.winner: Player | None = None
+        self.player_times_ms: list[int] = [0, 0]
+        self.time_limit_ms: int = time_limit_ms
+        self.cached_paths: list[list[Position] | None] = [
+            self._has_path_to_goal(0),
+            self._has_path_to_goal(1),
+        ]
         self._history: list[
             tuple[
                 Move,
@@ -55,6 +61,7 @@ class Board:
                 set[Wall],
                 Player,
                 Player | None,
+                list[list[Position] | None],
             ]
         ] = []
 
@@ -71,6 +78,7 @@ class Board:
                 self.walls.copy(),
                 self.current_player,
                 self.winner,
+                [p.copy() if p is not None else None for p in self.cached_paths],
             )
         )
         if move.kind == "pawn":
@@ -78,10 +86,16 @@ class Board:
             goal_row = 0 if self.current_player == 0 else BOARD_SIZE - 1
             if move.y == goal_row:
                 self.winner = self.current_player
+            self.cached_paths[self.current_player] = self._has_path_to_goal(self.current_player)
         else:
             assert move.orientation is not None
             self.walls.add((move.orientation, move.x, move.y))
             self.walls_remaining[self.current_player] -= 1
+            for player in (0, 1):
+                if self._wall_blocks_path(
+                    move.orientation, move.x, move.y, self.cached_paths[player]
+                ):
+                    self.cached_paths[player] = self._has_path_to_goal(player)
 
         if self.winner is None:
             self.current_player = 1 if self.current_player == 0 else 0
@@ -90,12 +104,21 @@ class Board:
         """Undo the most recently applied move."""
         if not self._history or self._history[-1][0] != move:
             raise ValueError("Only the most recently applied move can be undone.")
-        _, pawns, walls_remaining, walls, current_player, winner = self._history.pop()
+        _, pawns, walls_remaining, walls, current_player, winner, cached_paths = (
+            self._history.pop()
+        )
         self.pawns = pawns
         self.walls_remaining = walls_remaining
         self.walls = walls
         self.current_player = current_player
         self.winner = winner
+        self.cached_paths = cached_paths
+
+    def tick_timer(self, player: Player, elapsed_ms: int) -> None:
+        """Increment the active player's time and check for timeout."""
+        self.player_times_ms[player] += elapsed_ms
+        if self.player_times_ms[player] > self.time_limit_ms and self.winner is None:
+            self.winner = 1 if player == 0 else 0
 
     def get_legal_moves(self) -> list[Move]:
         """Return every legal move for the player whose turn it is."""
@@ -131,8 +154,14 @@ class Board:
         return False
 
     def is_game_over(self) -> bool:
-        """Return whether either pawn has reached its goal row."""
-        return self.winner is not None
+        """Return whether either pawn has reached its goal row or a player timed out."""
+        if self.winner is not None:
+            return True
+        for player in (0, 1):
+            if self.player_times_ms[player] > self.time_limit_ms:
+                self.winner = 1 if player == 0 else 0
+                return True
+        return False
 
     @property
     def last_move(self) -> Move | None:
@@ -168,6 +197,26 @@ class Board:
                     destinations.add(side)
         return destinations
 
+    @staticmethod
+    def _wall_blocks_path(
+        orientation: Orientation,
+        x: int,
+        y: int,
+        path: list[Position] | None,
+    ) -> bool:
+        if not path or len(path) < 2:
+            return True
+        for i in range(len(path) - 1):
+            c1 = path[i]
+            c2 = path[i + 1]
+            if orientation == "horizontal" and c1[0] == c2[0]:
+                if y == min(c1[1], c2[1]) and x <= c1[0] <= x + 1:
+                    return True
+            elif orientation == "vertical" and c1[1] == c2[1]:
+                if x == min(c1[0], c2[0]) and y <= c1[1] <= y + 1:
+                    return True
+        return False
+
     def _can_place_wall(
         self,
         orientation: Orientation,
@@ -191,30 +240,49 @@ class Board:
             if overlaps:
                 return False
 
-        self.walls.add((orientation, x, y))
-        paths_remain = all(self._has_path_to_goal(player) for player in (0, 1))
-        self.walls.remove((orientation, x, y))
-        return paths_remain
+        for player in (0, 1):
+            cached = self.cached_paths[player]
+            if not cached or cached[0] != self.pawns[player]:
+                self.cached_paths[player] = self._has_path_to_goal(player)
 
-    def _has_path_to_goal(self, player: Player) -> bool:
+        blocks_0 = self._wall_blocks_path(orientation, x, y, self.cached_paths[0])
+        blocks_1 = self._wall_blocks_path(orientation, x, y, self.cached_paths[1])
+
+        if not blocks_0 and not blocks_1:
+            return True
+
+        self.walls.add((orientation, x, y))
+        p0_ok = (not blocks_0) or (self._has_path_to_goal(0) is not None)
+        p1_ok = (not blocks_1) or (self._has_path_to_goal(1) is not None)
+        self.walls.remove((orientation, x, y))
+        return p0_ok and p1_ok
+
+    def _has_path_to_goal(self, player: Player) -> list[Position] | None:
         goal_row = 0 if player == 0 else BOARD_SIZE - 1
-        queue = deque([self.pawns[player]])
-        visited = {self.pawns[player]}
+        start = self.pawns[player]
+        queue = deque([start])
+        parent: dict[Position, Position | None] = {start: None}
 
         while queue:
             current = queue.popleft()
             if current[1] == goal_row:
-                return True
+                path: list[Position] = []
+                curr: Position | None = current
+                while curr is not None:
+                    path.append(curr)
+                    curr = parent[curr]
+                path.reverse()
+                return path
             for dx, dy in ((0, -1), (1, 0), (0, 1), (-1, 0)):
                 neighbor = (current[0] + dx, current[1] + dy)
                 if (
                     self._inside(neighbor)
-                    and neighbor not in visited
+                    and neighbor not in parent
                     and not self._edge_blocked(current, neighbor)
                 ):
-                    visited.add(neighbor)
+                    parent[neighbor] = current
                     queue.append(neighbor)
-        return False
+        return None
 
     def _edge_blocked(self, start: Position, end: Position) -> bool:
         for orientation, x, y in self.walls:

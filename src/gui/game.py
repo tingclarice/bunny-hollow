@@ -304,6 +304,6 @@ class QuoridorGame:
             return "down" if delta[1] > 0 else "up"
         if delta[1] == 0 and abs(delta[0]) == 2:
             return "right" if delta[0] > 0 else "left"
-        raise ValueError(
-            f"Pawn move must be one orthogonal square or straight jump, got {delta}."
-        )
+        if delta[1] != 0:
+            return "down" if delta[1] > 0 else "up"
+        return "right" if delta[0] > 0 else "left"
